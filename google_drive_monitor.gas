@@ -1,0 +1,177 @@
+//
+// Ajax Gaier, 9.6.2013
+//
+
+// still has some logging and commented parts left
+
+function checkGoogleDrive(p_dir, p_level) {
+  
+  i_recur = UserProperties.getProperty('recur'); i_recur_nr = Number(i_recur);
+  if (i_recur) { // && p_level == 0
+    // get value
+    if (i_recur_nr != NaN && i_recur_nr > 0) {
+      recur_limit = i_recur;
+    }
+    // var text = textbox.value;
+    // Logger.log("recur " + i_recur_nr );
+  } else {
+    recur_limit = 3;
+  }
+
+  // if (p_level > 3) return ""; // limit recursion
+  if (p_level > recur_limit) return ""; // limit recursion
+  
+  var from_trigger=0;
+  if (typeof p_dir != "string") { 
+    // call from trigger
+    from_trigger=1;
+    p_dir = "/";
+  }
+  
+  // var folder = DocsList.getFolder('myDirectory'); // you can also start the check in a specific directory
+  if (p_dir == "" || p_dir == undefined) p_dir = '/';
+  if (p_level == "" || p_level == undefined) p_level = 0;
+  var folder = DocsList.getFolder(p_dir);
+  var folders = folder.getFolders();
+  var name, daysec = 24*3600000;
+  var msg = "";
+  var app = UiApp.getActiveApplication();
+  
+  datenow = (new Date).getTime();
+  diff_ok = daysec*14;  // younger than 14 days
+  diff_ok = daysec*2;   // younger than 2 days
+  diff_ok = daysec*1;   // younger than 1 day
+  
+  i_days = UserProperties.getProperty('days'); i_days_nr = Number(i_days);
+  if (i_days) { // && p_level == 0
+    // get value
+    if (i_days_nr != NaN && i_days_nr > 0) {
+      diff_ok = daysec*i_days_nr;
+    }
+    // var text = textbox.value;
+    // Logger.log("days " + i_days_nr + " " + diff_ok);
+  }
+  
+  var files = folder.getFiles();
+  var file2, name2;
+  for (var i2 = 0; i2 < files.length; i2++) {
+    file2 = files[i2];
+    name2 = file2.getName();
+    datefile = file2.getLastUpdated().getTime();
+    diff = datenow - datefile;
+    if (diff < diff_ok) {
+      diff_days = Math.floor(0.+ diff / (daysec));
+      // Logger.log(diff_days + " days old: Testing " + name2 + " in dir " + p_dir + ": " + file2.getLastUpdated());
+      // msg += diff_days + " days old: '" + name2 + "' in '" + str2 + "'\n\n         "+file2.getUrl()+ " " + file2.getThumbnail()+"\n\n" ;
+      msg += diff_days + " days old: '" + name2 + "' in '" + p_dir + "'\n\n         "+file2.getUrl()+"\n\n" ;
+    }
+  }    
+  
+  if (p_dir == "/") {
+    var dir = ""; // getFolder does not understand leading "/" ?
+  } else {
+    var dir=p_dir+"/"; 
+  }
+  
+  for (var i = 0; i <folders.length; i++) {
+    file = folders[i];
+    name = file.getName();
+    var new_dir = dir+name;
+    // start recursion
+    // Logger.log("Opening dir " + new_dir + " in " + p_dir);
+    msg += checkGoogleDrive(new_dir, p_level+1);    
+  }
+   
+  if (p_level > 0) return msg;
+ 
+  // UIUI
+  var app = UiApp.getActiveApplication();
+  var label = app.getElementById('statusLabel');
+  label.setText("RESULT");
+  // remove old msg
+  // Logger.log("check msgbo " + app.getElementById("msgbox"));
+  // try {app.getElementById("vertpan").remove(8); } catch (err) {};
+  app.add(app.createHTML('<pre style="background: #f4f4f4;">'+msg+"</pre>").setStyleAttribute("border", "2px solid silver")
+          .setStyleAttribute("font-size", "15px").setId("msgbox"));  
+
+  if (msg == "") return "";
+
+  // Logger.log("Would mail " + msg + " to " + Session.getUser().getEmail()); return; 
+ 
+  // addtl info
+  msg= "Google Drive Update Check by Ajax Gaier.\n\nListing files younger than " + (diff_ok / daysec) + " days. Recursion limit is " + recur_limit + ".\n\n" + msg;
+  // send email
+  email = Session.getUser().getEmail();
+  var subject = "Google Drive Update Check";
+  MailApp.sendEmail(email, subject, msg);   
+  
+};
+
+// UI construction
+function doGet(e) {
+  var myapp = UiApp.createApplication().setTitle('Google Drive Update Check');
+  var mypanel = myapp.createVerticalPanel().setStyleAttribute("margin", "20px").setId("vertpan");
+  var label0 = myapp.createLabel('Google Drive Update Check').setStyleAttribute("font-size", "42px").setStyleAttribute("margin-bottom", "3px")
+  .setId('headLabel').setStyleAttribute("margin-left", "0px").setStyleAttribute("border", "1px solid black").setStyleAttributes({padding: "5px", background: "#f0f0f0"});
+  // days
+  var label1 = myapp.createLabel('List item not older than days specified below:').setStyleAttribute("font-size", "20px")
+          .setId('daysLabel').setStyleAttribute("margin-left", "33px").setStyleAttribute("margin-top", "33px");
+  var text = myapp.createTextBox().setName("3").setStyleAttribute("margin-left", "33px")
+          .setId("textdays").setText("3").setName("text"); // .addChangeHandler(textbox_handler);
+  // recursion
+  var label2 = myapp.createLabel('Limit recursion to nr of levels below:').setStyleAttribute("font-size", "20px")
+          .setId('recurLabel').setStyleAttribute("margin-left", "33px");
+  var text2 = myapp.createTextBox().setName("3").setStyleAttribute("margin-left", "33px").setStyleAttribute("margin-bottom", "33px")
+          .setId("textrecur").setText("3").setName("text_recur"); // .addChangeHandler(textbox_handler);
+  info=myapp.createHTML('Walks through the users Google Drive and checks for files newer<br/>than the specified amount of days. Lists the files below and sends<br/>email with the result to the user.<p>Google Apps Script created by '+ 
+                        '<c href="http://www.ajaxgaier.com" target="_blank">Ajax Gaier</c>.</p>')
+          .setStyleAttribute("border", "0px solid silver").setStyleAttribute("font-size", "13px").setId("infobox");
+  // var anchor = myapp.createAnchor("Link to script", "www.google.com").setStyleAttribute("margin-bottom", "33px")
+     //     .setHref("https://script.google.com/macros/s/AKfycbyfsoAj07mnsMbwp1vAaDqGGJT0ibilq7Wv937-jGc/dev");
+  var label12 = myapp.createHTML('The command might take some time before coming back depending on the number of files<br/>and directories.')
+       .setId('takeespressoLabel').setStyleAttribute("font-size", "13px").setStyleAttribute("margin-left", "0px");
+  var mybutton = myapp.createButton('Start Google Drive Update Check').setStyleAttribute("font-size", "20px");
+  // mypanel.add(label0).add(info).add(anchor).add(label1).add(text).add(label2).add(text2).add(label12).add(mybutton);
+  mypanel.add(label0).add(info).add(label1).add(text).add(label2).add(text2).add(label12).add(mybutton);
+  myapp.add(mypanel);
+  var handler = myapp.createServerHandler('startCGD').addCallbackElement(text).addCallbackElement(text2);
+  mybutton.addClickHandler(handler);
+  var label = myapp.createLabel('CHECK IS RUNNING').setStyleAttribute("font-size", "20px")
+          .setId('statusLabel').setStyleAttribute("margin-left", "33px")
+          .setVisible(false);
+  myapp.add(label);
+  
+  // check store
+  i_recur = UserProperties.getProperty('recur');
+  if (i_recur) {
+   text2.setText(i_recur) 
+  }
+  i_days = UserProperties.getProperty('days');
+  if (i_days) {
+   text.setText(i_days) 
+  }
+
+  // return myapp to display the UiInstance object and all elements associated with it.
+  return myapp;
+}
+
+// callback for button
+function startCGD (e) {
+  var app = UiApp.getActiveApplication();
+
+  days = e.parameter.text;
+  recur = e.parameter.text_recur;
+  Logger.log("Days ... " + days + " " + recur);
+  UserProperties.setProperty('days', days);
+  UserProperties.setProperty('recur', recur);
+  
+  var label = app.getElementById('statusLabel');
+  label.setVisible(true).setText("Check RUNNING");
+  
+  app.close();
+  
+  // do the check
+  checkGoogleDrive("/", 0);
+
+  return app;
+}
