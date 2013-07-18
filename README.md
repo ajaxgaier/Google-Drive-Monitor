@@ -1,7 +1,7 @@
 Google-Drive-Monitor
 ====================
 
-Google Apps Script which monitor Google Drive for new files. Sends email with changes.
+Google Apps Script which monitors Google Drive for new files. Sends email with changes.
 
 Runs as standalone script. Also offers a GUI to configure the recursion level (how many directory levels to scan) 
 and the maximum age of the files to list.
